@@ -1,0 +1,60 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: billiard-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: billiard-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - ./influxdb/data:/var/lib/influxdb2
+      - ./influxdb/config:/etc/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: admin12345
+      DOCKER_INFLUXDB_INIT_ORG: billiard-org
+      DOCKER_INFLUXDB_INIT_BUCKET: billiard-monitoring
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: billiard-super-token-12345
+
+  node-red:
+    image: nodered/node-red:3.1
+    container_name: billiard-node-red
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./node-red/data:/data
+    environment:
+      TZ: Asia/Jakarta
+      FLOWS: flows.json
+    depends_on:
+      - mosquitto
+      - influxdb
+
+  simulator:
+    build:
+      context: ./simulator
+    container_name: billiard-simulator
+    restart: unless-stopped
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      MQTT_TOPIC_PREFIX: billiard/table
+      TABLE_COUNT: 5
+      PUBLISH_INTERVAL_SECONDS: 5
+      SIMULATION_MINUTES_PER_TICK: 5
+      RANDOM_SEED: 42
+    depends_on:
+      - mosquitto

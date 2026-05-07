@@ -1,0 +1,258 @@
+[
+  {
+    "id": "tab_billiard_monitoring",
+    "type": "tab",
+    "label": "Billiard Monitoring",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "ui_tab_main",
+    "type": "ui_tab",
+    "name": "Billiard Dashboard",
+    "icon": "dashboard",
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "ui_group_overview",
+    "type": "ui_group",
+    "name": "Status Meja",
+    "tab": "ui_tab_main",
+    "order": 1,
+    "disp": true,
+    "width": "24",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "ui_group_chart",
+    "type": "ui_group",
+    "name": "Grafik Durasi",
+    "tab": "ui_tab_main",
+    "order": 2,
+    "disp": true,
+    "width": "24",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "ui_group_alarm",
+    "type": "ui_group",
+    "name": "Alarm Overtime",
+    "tab": "ui_tab_main",
+    "order": 3,
+    "disp": true,
+    "width": "24",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "mqtt_broker_cfg",
+    "type": "mqtt-broker",
+    "name": "Mosquitto",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "node-red-dashboard",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": "",
+    "willMsg": {},
+    "sessionExpiry": ""
+  },
+  {
+    "id": "influxdb_cfg",
+    "type": "influxdb",
+    "hostname": "influxdb",
+    "port": "8086",
+    "protocol": "http",
+    "database": "",
+    "name": "InfluxDB2",
+    "usetls": false,
+    "tls": "",
+    "influxdbVersion": "2.0",
+    "url": "http://influxdb:8086",
+    "rejectUnauthorized": false,
+    "token": "billiard-super-token-12345",
+    "org": "billiard-org",
+    "bucket": "billiard-monitoring"
+  },
+  {
+    "id": "mqtt_in_tables",
+    "type": "mqtt in",
+    "z": "tab_billiard_monitoring",
+    "name": "MQTT Tables",
+    "topic": "billiard/table/+",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_cfg",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 120,
+    "wires": [
+      [
+        "json_parse_payload"
+      ]
+    ]
+  },
+  {
+    "id": "json_parse_payload",
+    "type": "json",
+    "z": "tab_billiard_monitoring",
+    "name": "Parse JSON",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 360,
+    "y": 120,
+    "wires": [
+      [
+        "function_prepare_messages"
+      ]
+    ]
+  },
+  {
+    "id": "function_prepare_messages",
+    "type": "function",
+    "z": "tab_billiard_monitoring",
+    "name": "Prepare Dashboard and Influx",
+    "func": "const table = msg.payload;\nconst statusColor = table.alarm ? '#ff5252' : (table.status === 'dipakai' ? '#ffb300' : '#26a69a');\nconst overviewMsg = {\n    payload: table,\n    topic: `table/${table.table_id}`\n};\nconst chartMsg = {\n    topic: table.table_name,\n    payload: table.duration_minutes\n};\nconst alarmText = table.alarm\n    ? `${table.table_name} overtime ${table.overtime_minutes} menit`\n    : `${table.table_name} normal`;\nconst alarmMsg = {\n    topic: table.table_name,\n    payload: alarmText,\n    color: statusColor\n};\nconst influxMsg = {\n    measurement: 'billiard_usage',\n    payload: [\n        {\n            duration_minutes: table.duration_minutes,\n            in_use: table.status === 'dipakai' ? 1 : 0,\n            alarm: table.alarm ? 1 : 0,\n            overtime_minutes: table.overtime_minutes\n        },\n        {\n            table_id: String(table.table_id),\n            table_name: table.table_name,\n            status: table.status\n        }\n    ],\n    timestamp: new Date(table.updated_at).getTime()\n};\nreturn [overviewMsg, chartMsg, alarmMsg, influxMsg];",
+    "outputs": 4,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 620,
+    "y": 120,
+    "wires": [
+      [
+        "ui_template_tables"
+      ],
+      [
+        "ui_chart_duration"
+      ],
+      [
+        "ui_text_alarm"
+      ],
+      [
+        "influx_out_tables"
+      ]
+    ]
+  },
+  {
+    "id": "ui_template_tables",
+    "type": "ui_template",
+    "z": "tab_billiard_monitoring",
+    "group": "ui_group_overview",
+    "name": "Table Status Cards",
+    "order": 1,
+    "width": "24",
+    "height": "10",
+    "format": "<style>\n  .billiard-grid { display:flex; flex-wrap:wrap; gap:12px; }\n  .billiard-card {\n    width: calc(20% - 12px);\n    min-width: 180px;\n    border-radius: 12px;\n    padding: 14px;\n    color: #1f2937;\n    box-shadow: 0 2px 6px rgba(0,0,0,0.15);\n    border-left: 8px solid #9ca3af;\n    background: #f3f4f6;\n  }\n  .billiard-card.free { background:#dcfce7; border-left-color:#16a34a; }\n  .billiard-card.used { background:#fef3c7; border-left-color:#d97706; }\n  .billiard-card.alarm { background:#fee2e2; border-left-color:#dc2626; animation: blink 1s infinite; }\n  .table-title { font-size:18px; font-weight:700; margin-bottom:10px; }\n  .table-line { font-size:14px; margin:4px 0; }\n  @keyframes blink {\n    0% { opacity: 1; }\n    50% { opacity: 0.65; }\n    100% { opacity: 1; }\n  }\n</style>\n<div>\n  <div class=\"billiard-grid\">\n    <div class=\"billiard-card {{tables[idx].alarm ? 'alarm' : (tables[idx].status === 'dipakai' ? 'used' : 'free')}}\" ng-repeat=\"idx in [1,2,3,4,5] track by idx\">\n      <div class=\"table-title\">{{tables[idx].table_name || ('Meja ' + idx)}}</div>\n      <div class=\"table-line\"><b>Status:</b> {{tables[idx].status || 'menunggu data'}}</div>\n      <div class=\"table-line\"><b>Durasi:</b> {{tables[idx].duration_minutes || 0}} menit</div>\n      <div class=\"table-line\"><b>Alarm:</b> {{tables[idx].alarm ? 'OVERTIME' : 'Normal'}}</div>\n      <div class=\"table-line\"><b>Update:</b> {{tables[idx].updated_at || '-'}}</div>\n    </div>\n  </div>\n</div>\n<script>\n(function(scope) {\n  scope.tables = scope.tables || {};\n  scope.$watch('msg', function(msg) {\n    if (!msg || !msg.payload) {\n      return;\n    }\n    scope.tables[msg.payload.table_id] = msg.payload;\n  });\n})(scope);\n</script>",
+    "storeOutMessages": true,
+    "fwdInMessages": true,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "className": "",
+    "x": 940,
+    "y": 60,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "ui_chart_duration",
+    "type": "ui_chart",
+    "z": "tab_billiard_monitoring",
+    "name": "Durasi Pemakaian",
+    "group": "ui_group_chart",
+    "order": 1,
+    "width": "24",
+    "height": "8",
+    "label": "Durasi Pemakaian Meja",
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Menunggu data...",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "",
+    "removeOlder": "2",
+    "removeOlderPoints": "",
+    "removeOlderUnit": "3600",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#9467bd",
+      "#8c564b",
+      "#e377c2",
+      "#7f7f7f",
+      "#bcbd22"
+    ],
+    "outputs": 1,
+    "useDifferentColor": false,
+    "className": "",
+    "x": 920,
+    "y": 120,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "ui_text_alarm",
+    "type": "ui_text",
+    "z": "tab_billiard_monitoring",
+    "group": "ui_group_alarm",
+    "order": 1,
+    "width": "24",
+    "height": "1",
+    "name": "Alarm Text",
+    "label": "{{msg.topic}}",
+    "format": "<span style=\"color:{{msg.color}};font-weight:700;\">{{msg.payload}}</span>",
+    "layout": "row-spread",
+    "className": "",
+    "x": 900,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "influx_out_tables",
+    "type": "influxdb out",
+    "z": "tab_billiard_monitoring",
+    "influxdb": "influxdb_cfg",
+    "name": "Save to InfluxDB",
+    "measurement": "billiard_usage",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "billiard-org",
+    "bucket": "billiard-monitoring",
+    "x": 920,
+    "y": 240,
+    "wires": []
+  }
+]

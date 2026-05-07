@@ -1,0 +1,11 @@
+{
+  "name": "billiard-node-red",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node-RED dependencies for billiard monitoring dashboard",
+  "dependencies": {
+    "node-red-dashboard": "3.6.5",
+    "node-red-contrib-influxdb": "0.7.0"
+  }
+}
+
