@@ -29,13 +29,15 @@ services:
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: billiard-super-token-12345
 
   node-red:
-    image: nodered/node-red:3.1
+    build:
+      context: ./node-red
+    image: billiard-node-red-custom
     container_name: billiard-node-red
     restart: unless-stopped
     ports:
       - "1880:1880"
     volumes:
-      - ./node-red/data:/data
+      - node_red_data:/data
     environment:
       TZ: Asia/Jakarta
       FLOWS: flows.json
@@ -58,3 +60,23 @@ services:
       RANDOM_SEED: 42
     depends_on:
       - mosquitto
+
+  mqtt-to-influx:
+    build:
+      context: ./mqtt-to-influx
+    container_name: billiard-mqtt-to-influx
+    restart: unless-stopped
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      MQTT_TOPIC: billiard/table/+
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: billiard-super-token-12345
+      INFLUX_ORG: billiard-org
+      INFLUX_BUCKET: billiard-monitoring
+    depends_on:
+      - mosquitto
+      - influxdb
+
+volumes:
+  node_red_data:

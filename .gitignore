@@ -19,3 +19,4 @@ node-red/data/lib/
 node-red/data/.sessions.json
 node-red/data/flows_cred.json
 node-red/data/.cache/
+node-red/data/settings.js
