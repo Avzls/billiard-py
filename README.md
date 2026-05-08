@@ -1,6 +1,6 @@
 # Sistem Monitoring Meja Billiard Realtime
 
-Simulasi monitoring 5 meja billiard berbasis Docker di Windows. Python mensimulasikan sensor meja, data dikirim lewat MQTT, disimpan ke InfluxDB, lalu divisualisasikan di dashboard Node-RED.
+Simulasi monitoring 5 meja billiard berbasis Docker di Windows. Python mensimulasikan sensor meja, data dikirim lewat MQTT, disimpan ke InfluxDB, lalu ditampilkan di dashboard Node-RED.
 
 ## Arsitektur
 
@@ -13,12 +13,42 @@ Python Simulator -> Mosquitto MQTT -> Node-RED Dashboard
 
 - 5 meja billiard realtime
 - Status meja `dipakai` / `kosong`
-- Durasi pemakaian update tiap 5 detik
+- Durasi pemakaian update otomatis
 - Alarm overtime jika durasi lebih dari 120 menit
-- Dashboard Node-RED dengan kartu meja, ringkasan status, panel alarm, dan grafik histori
-- Penyimpanan histori ke InfluxDB
+- Dashboard monitoring di Node-RED
+- Histori data tersimpan di InfluxDB
 
-## Struktur Folder
+## 1. Prasyarat
+
+Pastikan di PC sudah ada:
+
+- Windows
+- Docker Desktop aktif
+- Git
+
+Cek versi:
+
+```powershell
+docker --version
+docker compose version
+git --version
+```
+
+## 2. Clone Project
+
+Clone repository:
+
+```powershell
+git clone https://github.com/Avzls/billiard-py.git
+```
+
+Masuk ke folder project:
+
+```powershell
+cd billiard-py
+```
+
+## 3. Struktur Project
 
 ```text
 billiard-py/
@@ -47,19 +77,7 @@ billiard-py/
    └─ requirements.txt
 ```
 
-## Prasyarat
-
-- Windows + Docker Desktop aktif
-- Docker Compose v2
-
-Verifikasi:
-
-```powershell
-docker --version
-docker compose version
-```
-
-## Menjalankan Project
+## 4. Jalankan Semua Service
 
 Jalankan dari root project:
 
@@ -67,90 +85,13 @@ Jalankan dari root project:
 docker compose up -d --build
 ```
 
-Cek status service:
+Cek apakah semua container hidup:
 
 ```powershell
 docker compose ps
 ```
 
-Lihat log:
-
-```powershell
-docker compose logs -f
-```
-
-## Endpoint
-
-- Dashboard Node-RED: `http://localhost:1880/ui`
-- Editor Node-RED: `http://localhost:1880`
-- InfluxDB: `http://localhost:8086`
-- MQTT broker: `localhost:1883`
-
-## Kredensial InfluxDB
-
-- Username: `admin`
-- Password: `admin12345`
-- Organization: `billiard-org`
-- Bucket: `billiard-monitoring`
-- Token: `billiard-super-token-12345`
-
-## Cara Pakai
-
-1. Jalankan stack dengan `docker compose up -d --build`.
-2. Buka `http://localhost:1880/ui`.
-3. Amati dashboard:
-   - kartu hijau: meja kosong
-   - kartu kuning: meja sedang dipakai
-   - kartu merah: overtime aktif
-   - grafik bawah: histori durasi per meja
-4. Buka `http://localhost:8086` jika ingin melihat data histori di InfluxDB.
-5. Buka `http://localhost:1880` jika ingin mengubah flow atau tampilan dashboard.
-
-Catatan simulasi:
-
-- Data dikirim setiap 5 detik.
-- `SIMULATION_MINUTES_PER_TICK=5`, jadi 1 tick simulasi mewakili 5 menit pemakaian.
-- Ini sengaja dipercepat agar alarm overtime mudah terlihat saat demo.
-
-## Payload MQTT
-
-Topik:
-
-```text
-billiard/table/{id}
-```
-
-Contoh payload:
-
-```json
-{
-  "table_id": 3,
-  "table_name": "Meja 3",
-  "status": "dipakai",
-  "duration_minutes": 125,
-  "alarm": true,
-  "overtime_minutes": 5,
-  "updated_at": "2026-05-08T02:12:57.805215+00:00"
-}
-```
-
-## Komponen
-
-- `mosquitto`: broker MQTT
-- `simulator`: publisher Python untuk simulasi 5 meja
-- `mqtt-to-influx`: subscriber MQTT yang menulis data ke InfluxDB
-- `influxdb`: database time-series
-- `node-red`: dashboard monitoring realtime
-
-## Testing Cepat
-
-### 1. Pastikan semua container hidup
-
-```powershell
-docker compose ps
-```
-
-Yang harus muncul:
+Yang normal muncul:
 
 - `billiard-mosquitto`
 - `billiard-influxdb`
@@ -158,29 +99,41 @@ Yang harus muncul:
 - `billiard-simulator`
 - `billiard-mqtt-to-influx`
 
-### 2. Pastikan simulator publish data
+Kalau ada container lama nyangkut:
 
 ```powershell
-docker compose logs --tail 20 simulator
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
 
-Harus terlihat log `Published billiard/table/...`
+## 5. Endpoint yang Dipakai
 
-### 3. Pastikan data masuk ke InfluxDB
+Setelah semua service jalan, buka:
 
-```powershell
-docker exec billiard-influxdb sh -lc 'influx query --org billiard-org --token billiard-super-token-12345 "from(bucket: \"billiard-monitoring\") |> range(start: -10m) |> limit(n: 20)"'
-```
+- Dashboard monitoring: `http://localhost:1880/ui`
+- Editor Node-RED: `http://localhost:1880`
+- InfluxDB: `http://localhost:8086`
 
-### 4. Pastikan bridge menulis ke InfluxDB
+## 6. Login InfluxDB
 
-```powershell
-docker compose logs --tail 20 mqtt-to-influx
-```
+Kalau buka InfluxDB, pakai:
 
-Harus terlihat `Wrote to InfluxDB from topic ...`
+- Username: `admin`
+- Password: `admin12345`
+- Organization: `billiard-org`
+- Bucket: `billiard-monitoring`
+- Token: `billiard-super-token-12345`
 
-### 5. Pastikan dashboard realtime
+## 7. Cara Kerja Sistem
+
+Alur data:
+
+1. `simulator` membuat data palsu 5 meja billiard
+2. data dikirim ke broker MQTT `mosquitto`
+3. `node-red` membaca data MQTT untuk dashboard realtime
+4. `mqtt-to-influx` membaca data MQTT yang sama lalu menyimpannya ke InfluxDB
+
+## 8. Cara Monitoring dari UI
 
 Buka:
 
@@ -188,29 +141,112 @@ Buka:
 http://localhost:1880/ui
 ```
 
-Lalu lakukan hard refresh jika perlu:
+Di dashboard akan terlihat:
+
+- kartu status 5 meja
+- warna hijau untuk meja `kosong`
+- warna kuning untuk meja `dipakai`
+- warna merah untuk `overtime`
+- durasi pemakaian realtime
+- grafik perubahan durasi
+- panel alarm overtime
+
+Kalau dashboard belum update, lakukan hard refresh:
 
 ```text
 Ctrl + F5
 ```
 
-## Operasional
+## 9. Ini Simulasi, Bukan Sensor Asli
 
-Stop semua service:
+Data yang tampil adalah simulasi software, bukan dari hardware meja billiard asli.
+
+Artinya:
+
+- status meja bisa berubah otomatis
+- durasi bisa naik lalu reset ke `0`
+- perubahan itu normal karena dibuat oleh program simulator
+
+## 10. Setting Interval Simulasi
+
+Kalau mau ubah interval kirim data, edit file:
+
+- `docker-compose.yml`
+
+Cari bagian:
+
+```yml
+PUBLISH_INTERVAL_SECONDS: 5
+SIMULATION_MINUTES_PER_TICK: 5
+```
+
+Penjelasan:
+
+- `PUBLISH_INTERVAL_SECONDS`: kirim data tiap berapa detik nyata
+- `SIMULATION_MINUTES_PER_TICK`: tiap 1 kali kirim mewakili berapa menit simulasi
+
+Contoh:
+
+```yml
+PUBLISH_INTERVAL_SECONDS: 10
+SIMULATION_MINUTES_PER_TICK: 5
+```
+
+Setelah diubah, jalankan:
+
+```powershell
+docker compose up -d --build simulator
+```
+
+## 11. Testing Cepat
+
+### Cek log simulator
+
+```powershell
+docker compose logs --tail 20 simulator
+```
+
+Harus terlihat:
+
+```text
+Published billiard/table/...
+```
+
+### Cek log bridge ke InfluxDB
+
+```powershell
+docker compose logs --tail 20 mqtt-to-influx
+```
+
+Harus terlihat:
+
+```text
+Wrote to InfluxDB from topic ...
+```
+
+### Cek log Node-RED
+
+```powershell
+docker compose logs --tail 20 node-red
+```
+
+### Cek data masuk ke InfluxDB
+
+```powershell
+docker exec billiard-influxdb sh -lc 'influx query --org billiard-org --token billiard-super-token-12345 "from(bucket: \"billiard-monitoring\") |> range(start: -10m) |> limit(n: 20)"'
+```
+
+## 12. Stop Project
+
+Untuk menghentikan semua service:
 
 ```powershell
 docker compose down
 ```
 
-Start lagi:
+## 13. Reset Total
 
-```powershell
-docker compose up -d --build
-```
-
-## Reset Total Data
-
-Jika ingin mengulang dari kondisi benar-benar bersih:
+Kalau ingin mulai ulang dari kondisi bersih:
 
 ```powershell
 docker compose down
@@ -220,32 +256,27 @@ docker volume rm billiard-py_node_red_data
 docker compose up -d --build
 ```
 
-## Troubleshooting
+## 14. Troubleshooting
 
 ### Dashboard terbuka tapi tidak berubah
 
-- lakukan hard refresh `Ctrl + F5`
-- cek `docker compose logs --tail 20 node-red`
+- lakukan `Ctrl + F5`
 - cek `docker compose logs --tail 20 simulator`
+- cek `docker compose logs --tail 20 node-red`
 
-### Node-RED hidup tapi dashboard kosong
+### Container dobel
 
-- pastikan `http://localhost:1880/ui` yang dibuka, bukan editor
-- pastikan log menunjukkan `Connected to broker`
-
-### Data tidak masuk ke InfluxDB
-
-- cek log bridge:
+Kalau ada container service yang dobel:
 
 ```powershell
-docker compose logs -f mqtt-to-influx
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
-
-### InfluxDB error karena state lama
-
-- reset folder `influxdb/data` dan `influxdb/config`
-- start ulang stack
 
 ### Port bentrok
 
-Jika port `1880`, `1883`, atau `8086` sudah dipakai aplikasi lain, ubah port mapping di `docker-compose.yml`.
+Kalau port `1880`, `1883`, atau `8086` dipakai aplikasi lain, ubah port mapping di `docker-compose.yml`.
+
+### Data InfluxDB error karena state lama
+
+Lakukan reset total sesuai langkah di atas.
